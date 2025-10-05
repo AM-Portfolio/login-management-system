@@ -6,7 +6,7 @@
     <parent>
         <groupId>com.modernportfolio</groupId>
         <artifactId>login-management-system</artifactId>
-        <version>0.0.1-SNAPSHOT</version>
+        <version>0.0.1</version>
     </parent>
     <artifactId>config</artifactId>
     <packaging>jar</packaging>
@@ -21,12 +21,12 @@
         <dependency>
             <groupId>com.modernportfolio</groupId>
             <artifactId>util</artifactId>
-            <version>0.0.1-SNAPSHOT</version>
+            <version>0.0.1</version>
         </dependency>
         <dependency>
             <groupId>com.modernportfolio</groupId>
             <artifactId>service</artifactId>
-            <version>0.0.1-SNAPSHOT</version>
+            <version>0.0.1</version>
         </dependency>
     </dependencies>
 </project>
