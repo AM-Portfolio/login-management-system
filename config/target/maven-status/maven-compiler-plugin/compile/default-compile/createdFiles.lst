@@ -1,5 +1,0 @@
-com\modernportfolio\configuration\CorsConfiguration.class
-com\modernportfolio\configuration\JwtAuthenticationEntryPoint.class
-com\modernportfolio\configuration\JwtRequestFilter.class
-com\modernportfolio\configuration\CorsConfiguration$1.class
-com\modernportfolio\configuration\WebSecurityConfiguration.class
