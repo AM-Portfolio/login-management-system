@@ -7,13 +7,26 @@
         <sourceOutputDir name="target/generated-sources/annotations" />
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
+        <module name="market-data-api" />
+        <module name="market-data-service" />
         <module name="util" />
         <module name="jwt-auth-starter" />
         <module name="web" />
         <module name="service" />
+        <module name="market-data-app" />
+        <module name="market-data-kafka" />
         <module name="repository" />
         <module name="config" />
         <module name="entity" />
+      </profile>
+      <profile name="Annotation profile for Market Data Service" enabled="true">
+        <sourceOutputDir name="target/generated-sources/annotations" />
+        <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <processorPath useClasspath="false">
+          <entry name="$MAVEN_REPOSITORY$/org/projectlombok/lombok/1.18.30/lombok-1.18.30.jar" />
+        </processorPath>
+        <module name="market-data-common" />
       </profile>
     </annotationProcessing>
   </component>

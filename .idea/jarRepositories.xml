@@ -7,6 +7,26 @@
       <option name="url" value="https://repo.maven.apache.org/maven2" />
     </remote-repository>
     <remote-repository>
+      <option name="id" value="github-investment" />
+      <option name="name" value="GitHub AM Common Investment Service Apache Maven Packages" />
+      <option name="url" value="https://maven.pkg.github.com/AM-Portfolio/am-common-investment-service" />
+    </remote-repository>
+    <remote-repository>
+      <option name="id" value="github-login-management-system" />
+      <option name="name" value="GitHub JWT Login Apache Maven Packages" />
+      <option name="url" value="https://maven.pkg.github.com/AM-Portfolio/login-management-system" />
+    </remote-repository>
+    <remote-repository>
+      <option name="id" value="github-jwt-login" />
+      <option name="name" value="GitHub JWT Login Apache Maven Packages" />
+      <option name="url" value="https://maven.pkg.github.com/AM-Portfolio/jwt-login" />
+    </remote-repository>
+    <remote-repository>
+      <option name="id" value="github-am-common" />
+      <option name="name" value="GitHub AM Common Data Model Apache Maven Packages" />
+      <option name="url" value="https://maven.pkg.github.com/AM-Portfolio/am-common-data-parent" />
+    </remote-repository>
+    <remote-repository>
       <option name="id" value="central" />
       <option name="name" value="Maven Central repository" />
       <option name="url" value="https://repo1.maven.org/maven2" />
