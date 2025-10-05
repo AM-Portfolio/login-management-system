@@ -1,0 +1,4 @@
+com\modernportfolio\model\Role.class
+com\modernportfolio\model\JwtRequest.class
+com\modernportfolio\model\JwtResponse.class
+com\modernportfolio\model\User.class

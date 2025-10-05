@@ -1,0 +1,4 @@
+com\modernportfolio\controller\JwtController.class
+com\modernportfolio\controller\RoleController.class
+com\modernportfolio\controller\UserController.class
+LMSApplication.class

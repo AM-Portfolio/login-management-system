@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CompilerConfiguration">
+    <annotationProcessing>
+      <profile default="true" name="Default" enabled="true" />
+      <profile name="Maven default annotation processors profile" enabled="true">
+        <sourceOutputDir name="target/generated-sources/annotations" />
+        <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <module name="market-data-api" />
+        <module name="market-data-service" />
+        <module name="util" />
+        <module name="web" />
+        <module name="jwt-auth-starter" />
+        <module name="service" />
+        <module name="market-data-app" />
+        <module name="market-data-kafka" />
+        <module name="repository" />
+        <module name="config" />
+        <module name="entity" />
+      </profile>
+      <profile name="Annotation profile for Market Data Service" enabled="true">
+        <sourceOutputDir name="target/generated-sources/annotations" />
+        <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <processorPath useClasspath="false">
+          <entry name="$MAVEN_REPOSITORY$/org/projectlombok/lombok/1.18.30/lombok-1.18.30.jar" />
+        </processorPath>
+        <module name="market-data-common" />
+      </profile>
+    </annotationProcessing>
+    <bytecodeTargetLevel>
+      <module name="jwt-starter" target="17" />
+      <module name="jwt-validation-starter" target="17" />
+    </bytecodeTargetLevel>
+  </component>
+  <component name="JavacSettings">
+    <option name="ADDITIONAL_OPTIONS_OVERRIDE">
+      <module name="config" options="-parameters" />
+      <module name="entity" options="-parameters" />
+      <module name="jwt-auth-starter" options="-parameters" />
+      <module name="jwt-starter" options="-parameters" />
+      <module name="jwt-validation-starter" options="-parameters" />
+      <module name="repository" options="-parameters" />
+      <module name="service" options="-parameters" />
+      <module name="util" options="-parameters" />
+      <module name="web" options="-parameters" />
+    </option>
+  </component>
+</project>

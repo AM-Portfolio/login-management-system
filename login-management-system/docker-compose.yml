@@ -1,0 +1,49 @@
+version: '3.8'
+
+
+services:
+  login-management-system-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - GITHUB_PACKAGES_USERNAME=${GITHUB_PACKAGES_USERNAME}
+        - GITHUB_PACKAGES_TOKEN=${GITHUB_PACKAGES_TOKEN}
+    environment:
+      # Spring Profile
+      - SPRING_PROFILES_ACTIVE=docker
+      
+      # Database Configuration
+      - SPRING_DATASOURCE_URL=${POSTGRES_URL}/${POSTGRES_DATABASE}
+      - SPRING_DATASOURCE_USERNAME=${POSTGRES_USERNAME}
+      - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD}
+      
+      # JWT Configuration
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRATION=${JWT_EXPIRATION}
+      
+      # Application Configuration
+      - APP_NAME=login-management-system
+      - APP_DESCRIPTION=JWT Authentication Service
+    entrypoint: ["/bin/sh", "-c"]
+    command: 
+      - |
+        echo "=== JWT Login Service Environment Variables ==="
+        echo "Database URL: $${SPRING_DATASOURCE_URL}"
+        echo "Database User: $${SPRING_DATASOURCE_USERNAME}"
+        echo "JWT Secret: [HIDDEN]"
+        echo "JWT Expiration: $${JWT_EXPIRATION}"
+        echo "=== Starting JWT Login Service ==="
+        java -jar app.jar
+    ports:
+      - "8080:8080"
+    network_mode: "host"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

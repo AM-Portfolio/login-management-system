@@ -1,0 +1,162 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "login-management-system.fullname" . }}
+  labels:
+    {{- include "login-management-system.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "login-management-system.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        # Prometheus annotations for metrics collection
+        prometheus.io/scrape: "{{ .Values.monitoring.prometheus.scrape }}"
+        prometheus.io/path: "{{ .Values.monitoring.prometheus.path }}"
+        prometheus.io/port: "{{ .Values.monitoring.prometheus.port }}"
+        # Add checksum annotations for config changes
+        checksum/config: {{ include (print $.Template.BasePath "/config.yaml") . | sha256sum }}
+        # Vault Agent Injector annotations
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/auth-config-audience: "vault"
+        vault.hashicorp.com/auth-config-issuer: "https://kubernetes.default.svc.cluster.local"
+        vault.hashicorp.com/auth-config-disable-iss-validation: "true"
+        vault.hashicorp.com/auth-config-disable-local-ca-jwt: "true"
+        vault.hashicorp.com/role: "dev-role"
+        vault.hashicorp.com/agent-pre-populate-only: "true"
+        vault.hashicorp.com/agent-inject-secret-postgres: "{{ .Values.vault.secretPaths.postgres }}"
+        vault.hashicorp.com/agent-inject-template-postgres: |
+          {{`{{- with secret "kv/preprod/database/postgres" -}}
+          SPRING_DATASOURCE_URL="jdbc:postgresql://{{ .Data.data.host }}:{{ .Data.data.port }}/{{ .Data.data.database }}"
+          SPRING_DATASOURCE_USERNAME="{{ .Data.data.username }}"
+          SPRING_DATASOURCE_PASSWORD="{{ .Data.data.password }}"
+          {{- end -}}`}}
+        vault.hashicorp.com/agent-inject-secret-jwt: "{{ .Values.vault.secretPaths.jwt }}"
+        vault.hashicorp.com/agent-inject-template-jwt: |
+          {{`{{- with secret "kv/preprod/jwt" -}}
+          JWT_SECRET="{{ .Data.data.secret }}"
+          JWT_EXPIRATION="{{ .Data.data.expiration }}"
+          {{- end -}}`}}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "login-management-system.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "login-management-system.serviceAccountName" . }}
+      imagePullSecrets:
+      - name: ghcr-secret
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # Command to load Vault secrets before starting the application
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              # Load all Vault secret files
+              echo "Starting environment variable loading from Vault secrets..."
+              
+              # Create a temporary env file to store all variables
+              ENV_FILE=$(mktemp)
+              
+              # Add default environment variables
+              echo "SPRING_PROFILES_ACTIVE={{ .Values.environment }}" >> $ENV_FILE
+              
+              # Process PostgreSQL variables
+              if [ -f /vault/secrets/postgres ]; then
+                echo "Loading PostgreSQL variables from Vault..."
+                cat /vault/secrets/postgres | sed 's/$/\n/' >> $ENV_FILE
+              else
+                echo "PostgreSQL secret file not found, using defaults"
+                echo "SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/jwtlogin" >> $ENV_FILE
+                echo "SPRING_DATASOURCE_USERNAME=postgres" >> $ENV_FILE
+                echo "SPRING_DATASOURCE_PASSWORD=postgres" >> $ENV_FILE
+              fi
+              
+              # Process JWT variables
+              if [ -f /vault/secrets/jwt ]; then
+                echo "Loading JWT variables from Vault..."
+                cat /vault/secrets/jwt | sed 's/$/\n/' >> $ENV_FILE
+              else
+                echo "JWT secret file not found, using config values"
+                echo "JWT_SECRET={{ .Values.config.jwt.secretKey }}" >> $ENV_FILE
+                echo "JWT_EXPIRATION={{ .Values.config.jwt.tokenValidity }}" >> $ENV_FILE
+              fi
+              
+              # Load all environment variables
+              echo "Loading environment variables from $ENV_FILE"
+              set -a
+              . $ENV_FILE
+              set +a
+              
+              # Debug output
+              echo "Environment variables loaded:"
+              echo "SPRING_DATASOURCE_URL is set to: ${SPRING_DATASOURCE_URL:-not set}"
+              echo "SPRING_PROFILES_ACTIVE is set to: ${SPRING_PROFILES_ACTIVE:-not set}"
+              echo "JWT_SECRET is set to: ${JWT_SECRET:-not set}"
+              
+              # Start the application with environment variables
+              echo "Starting JWT Login application"
+              java -jar app.jar
+          # Load environment variables from ConfigMap
+          envFrom:
+            - configMapRef:
+                name: {{ include "login-management-system.fullname" . }}-config
+          env:
+            # JWT Configuration
+            - name: JWT_TOKEN_VALIDITY
+              value: "{{ .Values.config.jwt.tokenValidity }}"
+            - name: JWT_SECRET_KEY
+              value: "{{ .Values.config.jwt.secretKey }}"
+            # CORS Configuration
+            - name: CORS_ALLOWED_ORIGINS
+              value: "{{ .Values.config.cors.allowedOrigins }}"
+            - name: CORS_ALLOWED_METHODS
+              value: "{{ .Values.config.cors.allowedMethods }}"
+            - name: CORS_ALLOWED_HEADERS
+              value: "{{ .Values.config.cors.allowedHeaders }}"
+            # Spring Profile Configuration
+            - name: SPRING_PROFILES_ACTIVE
+              value: "{{ .Values.environment }}"
+            # Metrics Configuration
+            - name: MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE
+              value: "health,metrics,prometheus"
+            - name: MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS
+              value: "always"
+            - name: MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED
+              value: "true"
+            - name: MANAGEMENT_HEALTH_LIVENESSSTATE_ENABLED
+              value: "true"
+            - name: MANAGEMENT_HEALTH_READINESSSTATE_ENABLED
+              value: "true"
+            - name: MANAGEMENT_METRICS_TAGS_APPLICATION
+              value: "login-management-system-{{ .Values.environment }}"
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          # Health checks
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+            successThreshold: 1
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 10
+            failureThreshold: 3
+            successThreshold: 1
+          # Resource limits from values file
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
