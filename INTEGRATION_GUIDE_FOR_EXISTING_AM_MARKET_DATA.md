@@ -13,36 +13,40 @@ Add this **ONE** dependency to your EXISTING pom.xml file:
 <dependency>
     <groupId>com.modernportfolio</groupId>
     <artifactId>jwt-auth-starter</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>0.1.0-SNAPSHOT</version>
 </dependency>
 ```
 
 That's it! This single JAR includes:
 - All JWT utilities (JwtUtil)
-- All security filters (JwtRequestFilter, JwtAuthenticationEntryPoint)
-- All authentication services (JwtService)
-- All entity models (User, Role)
-- All repositories
+- JWT Authentication Entry Point (JwtAuthenticationEntryPoint)
+- Auto-configuration for JWT validation
 - All required dependencies (jjwt, spring-security, etc.)
+
+**Note:** User management components (JwtService, UserService, RoleService) are automatically excluded - you only get token validation capabilities.
 
 ## Step 2: Add JWT Configuration to Your application.properties
 
 Add this to your EXISTING application.properties file:
 
 ```properties
+# Server Configuration (choose a different port if 8080 is in use)
+server.port=8081
+
+# Application Name
+spring.application.name=market-data-service
+
 # JWT Configuration (MUST match login-management-system)
 jwt.secret=g4ASf2sEJk08Y3GoiHKdF0F78E2Vj34S+KmN1IJdF2ncxEh0bxyT1XQEPYTc7SQvqO+3wd9MC8X7S6nG0Rb0TQ==
 
-# Allow circular references for login-management-system integration
-spring.main.allow-circular-references=true
-
 # JWT Logging
 logging.level.com.modernportfolio=DEBUG
+logging.level.com.am.marketdata=DEBUG
 ```
 
 ## Step 3: Update Your Main Application Class
 
-Update your EXISTING AmMarketDataApplication.java (or whatever it's called):
+Update your EXISTING AmMarketDataApplication.java with a SINGLE import:
 
 ```java
 package com.am.marketdata;
@@ -50,11 +54,13 @@ package com.am.marketdata;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Import;
+import com.modernportfolio.autoconfigure.JwtValidationAutoConfiguration;
 
 @SpringBootApplication
+@Import(JwtValidationAutoConfiguration.class)  // Single line JWT integration!
 @ComponentScan(basePackages = {
-    "com.am.marketdata",           // Your existing package
-    "com.modernportfolio"          // Scan login-management-system components
+    "com.am.marketdata"           // Your existing package
 })
 public class AmMarketDataApplication {
     public static void main(String[] args) {
@@ -63,7 +69,106 @@ public class AmMarketDataApplication {
 }
 ```
 
-## Step 4: Create SecurityConfig in Your Project
+**That's it!** No need for multiple @ComponentScan annotations. The `JwtValidationAutoConfiguration` handles everything automatically.
+
+## Step 4: Create Custom JWT Filter for Your Project
+
+Since your project only validates tokens (doesn't create them), create a lightweight JWT filter:
+
+Location: `src/main/java/com/am/marketdata/config/MarketDataJwtRequestFilter.java`
+
+```java
+package com.am.marketdata.config;
+
+import com.modernportfolio.util.JwtUtil;
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.MalformedJwtException;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.NonNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
+import org.springframework.stereotype.Component;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import java.io.IOException;
+import java.util.Collections;
+
+/**
+ * Custom JWT filter for market-data application that validates JWT tokens
+ * without requiring user management (UserDao/JwtService).
+ */
+@Component
+public class MarketDataJwtRequestFilter extends OncePerRequestFilter {
+
+    private static final Logger logger = LoggerFactory.getLogger(MarketDataJwtRequestFilter.class);
+
+    @Autowired
+    private JwtUtil jwtUtil;
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, @NonNull HttpServletResponse response, 
+                                    @NonNull FilterChain filterChain) throws ServletException, IOException {
+
+        final String requestTokenHeader = request.getHeader("Authorization");
+
+        String username = null;
+        String jwtToken = null;
+
+        if (requestTokenHeader != null && requestTokenHeader.startsWith("Bearer ")) {
+            jwtToken = requestTokenHeader.substring(7);
+            try {
+                username = jwtUtil.getUsernameFromToken(jwtToken);
+            } catch (IllegalArgumentException e) {
+                logger.info("Illegal Argument while fetching the username: {}", e.getMessage());
+            } catch (ExpiredJwtException e) {
+                logger.info("Given jwt token is expired: {}", e.getMessage());
+            } catch (MalformedJwtException e) {
+                logger.info("Invalid Token: {}", e.getMessage());
+            } catch (Exception e) {
+                logger.error("Error validating JWT token", e);
+            }
+        } else {
+            logger.debug("JWT token does not start with Bearer");
+        }
+
+        if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+            try {
+                // Create a simple UserDetails object without querying the database
+                UserDetails userDetails = User.builder()
+                        .username(username)
+                        .password("") // No password needed for token validation
+                        .authorities(Collections.singletonList(new SimpleGrantedAuthority("ROLE_USER")))
+                        .build();
+
+                // Validate the token
+                if (jwtUtil.validateToken(jwtToken, userDetails)) {
+                    UsernamePasswordAuthenticationToken authenticationToken = 
+                            new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+                    authenticationToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                    SecurityContextHolder.getContext().setAuthentication(authenticationToken);
+                    logger.debug("Successfully authenticated user: {}", username);
+                }
+            } catch (Exception e) {
+                logger.error("Error during token validation for user: {}", username, e);
+            }
+        }
+        
+        filterChain.doFilter(request, response);
+    }
+}
+```
+
+## Step 5: Create SecurityConfig in Your Project
 
 Create this NEW file in your am-market-data project:
 Location: `src/main/java/com/am/marketdata/config/SecurityConfig.java`
@@ -71,7 +176,6 @@ Location: `src/main/java/com/am/marketdata/config/SecurityConfig.java`
 ```java
 package com.am.marketdata.config;
 
-import com.modernportfolio.configuration.JwtRequestFilter;
 import com.modernportfolio.configuration.JwtAuthenticationEntryPoint;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
@@ -96,7 +200,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     @Autowired
-    private JwtRequestFilter jwtRequestFilter;
+    private MarketDataJwtRequestFilter marketDataJwtRequestFilter;
 
     @Autowired
     private JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
@@ -126,13 +230,13 @@ public class SecurityConfig {
             .exceptionHandling(ex -> ex.authenticationEntryPoint(jwtAuthenticationEntryPoint))
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 
-        http.addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
+        http.addFilterBefore(marketDataJwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
 }
 ```
 
-## Step 5: Your Controllers Don't Need Changes!
+## Step 6: Your Controllers Don't Need Changes!
 
 Your EXISTING controllers will automatically be protected. The JWT validation happens in the filter layer.
 
@@ -152,7 +256,7 @@ public ResponseEntity<Map<String, String>> getLoginUrl() {
 }
 ```
 
-## Step 6: Build and Run
+## Step 7: Build and Run
 
 ```bash
 # Build login-management-system first (this creates the jwt-auth-starter JAR)
@@ -161,13 +265,13 @@ mvn clean install
 
 # Then build and run your am-market-data
 cd D:\am\am-market-data
-mvn clean install
-mvn spring-boot:run
+mvn clean package
+java -jar market-data-app/target/market-data-app-1.0-SNAPSHOT.jar
 ```
 
 ## Testing
 
-1. **Get JWT Token:**
+1. **Get JWT Token from login-management-system:**
 ```bash
 POST http://localhost:8080/authenticate
 Content-Type: application/json
@@ -178,18 +282,52 @@ Content-Type: application/json
 }
 ```
 
-2. **Use Token:**
+Response:
+```json
+{
+  "jwtToken": "eyJhbGciOiJIUzI1NiJ9...",
+  "user": {
+    "userName": "your-username",
+    ...
+  }
+}
+```
+
+2. **Use Token in am-market-data:**
 ```bash
-GET http://localhost:8080/auth/login-url
-Authorization: Bearer <your-jwt-token>
+GET http://localhost:8081/api/v1/market-data
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9...
 ```
 
 ## Summary
 
-✅ **Add ONLY 1 dependency** - `jwt-auth-starter` (includes everything)  
+✅ **Add ONLY 1 dependency** - `jwt-auth-starter` (version 0.1.0-SNAPSHOT)  
+✅ **Add ONLY 1 import** - `JwtValidationAutoConfiguration` in your main class  
 ✅ Add JWT secret to application.properties  
-✅ Update main class with @ComponentScan  
-✅ Create SecurityConfig.java  
+✅ Create custom `MarketDataJwtRequestFilter` (no database lookups)  
+✅ Create `SecurityConfig.java` with your custom filter  
 ✅ Your existing controllers work as-is  
 
-**No multiple dependencies needed - just ONE JAR!**
+## What Gets Imported Automatically
+
+When you use `@Import(JwtValidationAutoConfiguration.class)`, you automatically get:
+
+✅ `JwtUtil` - For token parsing and validation  
+✅ `JwtAuthenticationEntryPoint` - For handling authentication errors  
+
+## What Gets Excluded Automatically
+
+The auto-configuration automatically excludes these (they require database):
+
+❌ `JwtService` - Requires UserDao  
+❌ `UserService` - Requires UserDao and RoleDao  
+❌ `RoleService` - Requires RoleDao  
+❌ `JwtRequestFilter` - Requires JwtService (you create your own custom filter)  
+❌ `WebSecurityConfiguration` - You provide your own SecurityConfig  
+
+## Architecture
+
+- **login-management-system** (port 8080): Issues JWT tokens, manages users
+- **am-market-data** (port 8081): Validates JWT tokens only, no user management
+
+**No multiple dependencies needed - just ONE JAR with ONE import!** 🚀
